@@ -3,5 +3,8 @@ channels:
   - defaults
   - adl
 dependencies:
-  - spot
+  - bqplot
+  - numpy
+  - scipy
   - graphviz
+  - python-graphviz
