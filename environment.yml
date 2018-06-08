@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - defaults
+  - adl
+dependencies:
+  - spot
+  - graphviz
