@@ -1,18 +1,19 @@
 
 import math
 import numpy
+import sys
 
 from ss.mockendpoint import MockEndpoint
 from ss.mockexecution import MockExecution
 from ss.mockreservoir import MockReservoir
 
 class MockAgent(object):
-    def __init__(self, r, sampling_target=10, reservoir_size=1000, bundle_span_counts=False): # seed=1234567
+    def __init__(self, r, sampler,
+                 reservoir_size=1000, bundle_span_counts=False): # seed=1234567
         self.r = r
-        #self.r = numpy.random.RandomState(seed)
 
         self.reservoir_size = reservoir_size
-        self.sampling_target = sampling_target
+        self.sampler = sampler
         
         self.completion_threshold = 1.00
 
@@ -46,14 +47,19 @@ class MockAgent(object):
                 key=lambda x: x.weight,
                 reverse=True)])
     
-    def montecarlo_simulate(self, run_index, num_harvests):
-        results = [
-            self.simulate_harvest(run_index)
-                for i in range(0, num_harvests)]
-
+    def montecarlo_simulate(self, fan_in, num_harvests):
         percent_traced = []
         choice_hist = numpy.zeros(self.num_endpoints)
-        for result in results:
+        target_trace_count = self.sampler.sampling_target * (fan_in + 1) * num_harvests
+        
+        total_trace_count = 0
+        total_sampled_count = 0
+        
+        datasets = []
+        while target_trace_count > 0:
+            result = self.simulate_harvest(fan_in)
+            target_trace_count -= result.sampledTrue_count
+            
             complete_trace_count = 0
 
             for execution in result.reservoir:
@@ -61,7 +67,16 @@ class MockAgent(object):
                     choice_hist[execution.endpoint_index] += 1
                     complete_trace_count += 1
 
-            percent_traced.append(complete_trace_count / result.total_sampledTrue)
+            datasets.append((complete_trace_count, result.sampledTrue_count))
+            total_trace_count += complete_trace_count
+            total_sampled_count += result.sampledTrue_count
+            
+        #print("  estimated length:%d, traced:%d, sampled: %d" % (
+        #    self.span_count_estimate, total_trace_count, total_sampled_count), file=sys.stderr)
+        #for ds in datasets:
+        #    print("    traced:%d, sampled: %d" % ds, file=sys.stderr)
+        
+        percent_traced = total_trace_count / total_sampled_count
 
         s = sum(choice_hist)
         if s > 0:
@@ -69,41 +84,32 @@ class MockAgent(object):
         error_hist = (choice_hist - self.weights) ** 2
 
         header = "  %d, %.3f/%.3f, %.3E" % (
-            run_index+1, numpy.mean(percent_traced), numpy.std(percent_traced), sum(error_hist))
+            fan_in+1, percent_traced, 0.0, sum(error_hist))
         
         return header
 
     def simulate_harvest(self, fan_in):
-        total_sampledTrue = sum([
-            max(1, int(x)) for x in numpy.rint(
-                self.r.normal(
-                    self.sampling_target,
-                    math.log(max(2, self.sampling_target)),
-                    fan_in + 1))])
+        sampledTrue_count = self.sampler.generate_samples(fan_in)
+        
+        if sampledTrue_count == 0:
+            return MockReservoir(self.reservoir_size, 0, [])
 
-        try:
-            endpoint_path_choices = self.r.uniform(0, 1, total_sampledTrue)
-            priorities = self.r.uniform(0, 1, total_sampledTrue)
-            completion_chance = self.r.uniform(0, 1, total_sampledTrue)
-        except:
-            import pdb
-            pdb.set_trace()
-            raise
+        endpoint_path_choices = self.r.uniform(0, 1, sampledTrue_count)
+        priorities = self.r.uniform(0, 1, sampledTrue_count)
 
         executions = []
-        for i in range(0, total_sampledTrue):
+        for i in range(0, sampledTrue_count):
             choice = endpoint_path_choices[i]
             priority = priorities[i]
 
             chosen_index = sum(choice > self.cum_weights)
             path = self.endpoint_paths[chosen_index]
-            #is_completed = completion_chance[i] < self.completion_threshold
-            is_completed = True
 
             e = MockExecution(
-                self.r, chosen_index, is_completed,
+                self.r, chosen_index, True,
                 path.total_spans, priority)
 
             executions.append(e)
 
-        return MockReservoir(self.reservoir_size, total_sampledTrue, executions)
+        return MockReservoir(self.reservoir_size, sampledTrue_count, executions)
+    

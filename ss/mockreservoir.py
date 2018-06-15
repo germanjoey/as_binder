@@ -1,8 +1,8 @@
 
 class MockReservoir(object):
-    def __init__(self, reservoir_size, total_sampledTrue, raw_results):
+    def __init__(self, reservoir_size, sampledTrue_count, raw_results):
         self.reservoir_size = reservoir_size
-        self.total_sampledTrue = total_sampledTrue
+        self.sampledTrue_count = sampledTrue_count
         self.raw_results = raw_results
 
         sorted_executions = sorted(
@@ -25,5 +25,5 @@ class MockReservoir(object):
 
     def __repr__(self):
         total_spans_sent = sum([x.path_spans for x in self.reservoir])
-        header = "**%s %s\n  " % (self.total_sampledTrue, total_spans_sent)
+        header = "**%s %s\n  " % (self.sampledTrue_count, total_spans_sent)
         return header + "\n  ".join([str(x) for x in self.reservoir])
