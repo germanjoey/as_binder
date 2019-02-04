@@ -10,6 +10,16 @@ fan_in = 10
 header_re = re.compile(r'\D+(\d+)\D+(\d+\.\d+)/(\d+\.\d+)')
 per_test_re = re.compile(r'\s*(\d+), (\d\.\d+)/(\d+\.\d+), (\d\.\d+E[\-+]\d+)')
 
+def get_degradation_results(reservoir_size, sampling_target):
+
+    rr = {}
+    for sampler in ['uniform', 'normal']:
+        filename = 'ss/degradation_results_%s_%d_%d.txt' % (
+            sampler, reservoir_size, sampling_target)
+        results = parse_degradation_results(filename)
+        rr[sampler] = results
+    return rr
+
 def parse_degradation_results(filename):
     with open(filename) as f:
         lines = f.readlines()
@@ -25,7 +35,6 @@ def parse_degradation_results(filename):
             
         (endpoints, mean_length, std_length) = (hm[1], hm[2], hm[3])
 
-        #for j in range(1, 2):
         for j in range(1, fan_in+1):
             tm = per_test_re.match(lines[i+j])
             if tm is None:
@@ -44,17 +53,22 @@ def parse_degradation_results(filename):
 
     return results
 
-def get_degradation_results(reservoir_size, sampling_target):
-    rr = {}
-    for sampler in ['uniform', 'normal']:
-        filename = 'ss/degradation_results_%s_%d_%d.txt' % (
-            sampler, reservoir_size, sampling_target)
-        results = parse_degradation_results(filename)
-        rr[sampler] = results
-    return rr
+def diff_result_set(results, index, name1, name2):
+    xd = [float(x) for x in results[name1]['x'][index]]
+    nr = numpy.array([float(x) for x in results[name1]['y'][index]])
+    ur = numpy.array([float(x) for x in results[name2]['y'][index]])
+
+    yd = 2.0 * (nr - ur) / (nr + ur)
+    yz = list(zip(xd, list(yd)))
+    ys = sorted(yz, key=lambda a: a[0])
+
+    xdata = numpy.array([b[0] for b in ys if b[0] < 300])
+    ydata = numpy.array([b[1] for b in ys if b[0] < 300])
+
+    return xdata, ydata
 
 def plot_degradation_results(reservoir_size=1000, sampling_target=10):
-    x_sc = LinearScale(min=0)
+    x_sc = LinearScale(min=0, max=260)
     y_sc = LinearScale(min=0, max=1)
 
     ax_x = Axis(label='Average Trace Length', color='black',
@@ -117,10 +131,9 @@ def plot_degradation_results(reservoir_size=1000, sampling_target=10):
 
     display(fig)
 
-
 def plot_comparison_degradation_results(reservoir_size=1000, sampling_target=10):
-    x_sc = LinearScale(min=0)
-    y_sc = LinearScale(min=0)
+    x_sc = LinearScale(min=0, max=260)
+    y_sc = LinearScale(min=0, max=0.2)
 
     ax_x = Axis(label='Average Trace Length', color='black',
                  scale=x_sc, grid_lines='solid')
@@ -139,16 +152,7 @@ def plot_comparison_degradation_results(reservoir_size=1000, sampling_target=10)
         if index not in results['normal']['x']:
             continue
 
-        xd = [float(x) for x in results['normal']['x'][index]]
-        nr = numpy.array([float(x) for x in results['normal']['y'][index]])
-        ur = numpy.array([float(x) for x in results['uniform']['y'][index]])
-
-        yd = 2.0 * (nr - ur) / (nr + ur)
-        yz = list(zip(xd, list(yd)))
-        ys = sorted(yz, key=lambda a: a[0])
-
-        xdata = numpy.array([b[0] for b in ys])
-        ydata = numpy.array([b[1] for b in ys])
+        xdata, ydata = diff_result_set(results, index, 'normal', 'uniform')
 
         scatter_mark = Scatter(
             x=xdata,
@@ -161,8 +165,8 @@ def plot_comparison_degradation_results(reservoir_size=1000, sampling_target=10)
             display_legend=True)
         marks.append(scatter_mark)
 
-        xdata_l = [b[0] for b in ys]
-        ydata_s = signal.savgol_filter(ydata, 11, 3)
+        xdata_l = xdata
+        ydata_s = signal.savgol_filter(ydata, 25, 3)
         ydata_b = numpy.zeros(len(ydata_s))
 
         line_mark = Lines(
@@ -171,7 +175,7 @@ def plot_comparison_degradation_results(reservoir_size=1000, sampling_target=10)
             colors = [detail[1],detail[1]],
             scales={'x': x_sc, 'y': y_sc},
             fill='between',
-            fill_opacities=[0.9],
+            fill_opacities=[0.8],
             stroke_width=1,
             enable_hover=True)
         marks.append(line_mark)
@@ -180,6 +184,6 @@ def plot_comparison_degradation_results(reservoir_size=1000, sampling_target=10)
         marks=marks,
         axes=[ax_x, ax_y],
         legend_location='top-left',
-        title='% extra traces lost, AS vs new AS')
+        title='% extra traces gained, proposed AS - current AS')
 
     display(fig)

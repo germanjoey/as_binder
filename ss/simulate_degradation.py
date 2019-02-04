@@ -1,12 +1,14 @@
-
 import sys
 import numpy
+
+root_path = '/Users/jryan/Documents/as_binder'
+sys.path.insert(0, root_path)
 
 from ss.mockagent import MockAgent
 from ss.mocksampler import MockSampler
 
 num_runs = 1000
-num_agents = 100
+num_agents = 1000
 
 #param_sets = [(100, 1), (100, 10), (1000, 10)]
 param_sets = [(1000, 10)]

@@ -1,4 +1,4 @@
-
+"""
 class MockExecution(object):
     def __init__(self, r, endpoint_index, completed, path_spans, priority):
         self.r = r
@@ -21,3 +21,8 @@ class MockExecution(object):
         self.partial = True
         self.completed = False
         self.path_spans -= spans_not_fitting_in_reservoir
+"""
+
+from collections import namedtuple
+
+MockExecution = namedtuple('MockExecution', ['endpoint_index', 'completed', 'path_spans', 'priority'])

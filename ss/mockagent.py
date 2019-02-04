@@ -38,7 +38,10 @@ class MockAgent(object):
             MockEndpoint(self.r, self.path_span_counts[i], self.weights[i])
                 for i in range(self.num_endpoints)]
 
-        self.cum_weights = numpy.cumsum(self.weights)
+        self.weight_table = []
+        for i in range(0, len(self.weights)):
+            self.weight_table += [i]*int(1000*self.weights[i])
+        self.wtl = len(self.weight_table) - 1
 
     def __repr__(self):
         return "\n\n".join([
@@ -49,25 +52,24 @@ class MockAgent(object):
     
     def montecarlo_simulate(self, fan_in, num_harvests):
         percent_traced = []
-        choice_hist = numpy.zeros(self.num_endpoints)
+        #choice_hist = numpy.zeros(self.num_endpoints)
         target_trace_count = self.sampler.sampling_target * (fan_in + 1) * num_harvests
         
         total_trace_count = 0
         total_sampled_count = 0
         
-        datasets = []
+        #datasets = []
         while target_trace_count > 0:
             result = self.simulate_harvest(fan_in)
             target_trace_count -= result.sampledTrue_count
-            
-            complete_trace_count = 0
+            complete_trace_count = len(result.reservoir) # 0
 
-            for execution in result.reservoir:
-                if execution.completed:
-                    choice_hist[execution.endpoint_index] += 1
-                    complete_trace_count += 1
+            #for execution in result.reservoir:
+            #    if execution.completed:
+                    #choice_hist[execution.endpoint_index] += 1
+            #        complete_trace_count += 1
 
-            datasets.append((complete_trace_count, result.sampledTrue_count))
+            #datasets.append((complete_trace_count, result.sampledTrue_count))
             total_trace_count += complete_trace_count
             total_sampled_count += result.sampledTrue_count
             
@@ -78,13 +80,13 @@ class MockAgent(object):
         
         percent_traced = total_trace_count / total_sampled_count
 
-        s = sum(choice_hist)
-        if s > 0:
-            choice_hist /= s
-        error_hist = (choice_hist - self.weights) ** 2
+        #s = sum(choice_hist)
+        #if s > 0:
+        #    choice_hist /= s
+        #error_hist = (choice_hist - self.weights) ** 2
 
         header = "  %d, %.3f/%.3f, %.3E" % (
-            fan_in+1, percent_traced, 0.0, sum(error_hist))
+            fan_in+1, percent_traced, 0.0, 0.0)
         
         return header
 
@@ -94,7 +96,7 @@ class MockAgent(object):
         if sampledTrue_count == 0:
             return MockReservoir(self.reservoir_size, 0, [])
 
-        endpoint_path_choices = self.r.uniform(0, 1, sampledTrue_count)
+        endpoint_path_choices = self.r.random_integers(0, self.wtl, sampledTrue_count)
         priorities = self.r.uniform(0, 1, sampledTrue_count)
 
         executions = []
@@ -102,11 +104,11 @@ class MockAgent(object):
             choice = endpoint_path_choices[i]
             priority = priorities[i]
 
-            chosen_index = sum(choice > self.cum_weights)
+            chosen_index = self.weight_table[choice]
             path = self.endpoint_paths[chosen_index]
 
             e = MockExecution(
-                self.r, chosen_index, True,
+                chosen_index, True,
                 path.total_spans, priority)
 
             executions.append(e)
